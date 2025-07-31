@@ -518,8 +518,6 @@ async def handle_txt(client, message):
                     os.remove(thumb_path)
 
 
-    except Exception as e:
-        await notice.edit(f"❌ Error: {str(e)}")
 
 # ===================== MESSAGE HANDLERS =====================
 @app.on_message(filters.text & ~filters.command(["start", "help", "video", "settings", "cancel", "auth"]))

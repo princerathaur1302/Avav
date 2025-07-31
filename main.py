@@ -66,7 +66,7 @@ logger = logging.getLogger(__name__)
 # ============ CONFIGURATION ============
 API_ID = 20214595
 API_HASH = "4763f66ce1a18c2dd491a5048891926c"
-BOT_TOKEN = "8029951406:AAEtGeRP32VUcZ0c6KhpqPvjAXypiFtH-Jw"
+BOT_TOKEN = "8235342718:AAH3u7K8G9Rzz1GwU1eJCWVzeUMAhDg2rwI"
 ADMIN_ID = 7281824001
 CREDIT = " @contact_262524_bot "
 

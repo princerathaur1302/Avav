@@ -13,6 +13,8 @@ API_ID = 20214595
 API_HASH = "4763f66ce1a18c2dd491a5048891926c"
 BOT_TOKEN = "8235342718:AAH3u7K8G9Rzz1GwU1eJCWVzeUMAhDg2rwI"
 CREDIT = " @contact_262524_bot "
+CUSTOM_PHOTO = "photo.jpg"  # Add your custom photo file here
+
 app = Client("pdf_video_batch_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 token_waiters = {}
@@ -46,25 +48,28 @@ async def download_file_with_progress(url, dest_path, msg, chat_id):
 
     with open(dest_path, 'wb') as f:
         for chunk in r.iter_content(1024 * 1024):
-            f.write(chunk)
-            downloaded += len(chunk)
+            if chunk:  # filter out keep-alive new chunks
+                f.write(chunk)
+                downloaded += len(chunk)
 
-            now = time.time()
-            if now - last_update >= 3:
-                percent = (downloaded / total * 100) if total else 0
-                elapsed = now - start_time if now > start_time else 1
-                speed = downloaded / elapsed / (1024 * 1024)
+                now = time.time()
+                if now - last_update >= 3:
+                    percent = (downloaded / total * 100) if total else 0
+                    elapsed = now - start_time if now > start_time else 1
+                    speed = downloaded / elapsed / (1024 * 1024)
 
-                await msg.edit(
-                    f"📥 Downloading...\n"
-                    f"├─ Progress: {percent:.2f}%\n"
-                    f"├─ Speed: {speed:.2f} MB/s\n"
-                    f"└─ {downloaded // (1024 * 1024)}MB / {total // (1024 * 1024)}MB"
-                )
-                last_update = now
+                    try:
+                        await msg.edit(
+                            f"📥 Downloading...\n"
+                            f"├─ Progress: {percent:.2f}%\n"
+                            f"├─ Speed: {speed:.2f} MB/s\n"
+                            f"└─ {downloaded // (1024 * 1024)}MB / {total // (1024 * 1024)}MB"
+                        )
+                    except:
+                        pass
+                    last_update = now
 
     return dest_path
-
 
 def get_ffmpeg_path():
    return "ffmpeg"
@@ -133,7 +138,16 @@ async def start(client, message):
 
 @app.on_message(filters.command("batch"))
 async def batch_request(client, message):
-    msg = await message.reply("📄 Please send your .txt file now.")
+    # Send custom photo instead of plain text
+    if os.path.exists(CUSTOM_PHOTO):
+        msg = await client.send_photo(
+            message.chat.id,
+            CUSTOM_PHOTO,
+            caption="📄 Please send your .txt file now."
+        )
+    else:
+        msg = await message.reply("📄 Please send your .txt file now.")
+    
     await track_message(msg)
     await track_message(message)
 
@@ -145,7 +159,17 @@ async def handle_txt(client, message):
 
     chat_id = message.chat.id
     batch_name = os.path.splitext(message.document.file_name)[0]
-    notice = await message.reply("📥 Processing file...")
+    
+    # Send custom photo for processing message
+    if os.path.exists(CUSTOM_PHOTO):
+        notice = await client.send_photo(
+            chat_id,
+            CUSTOM_PHOTO,
+            caption="📥 Processing file..."
+        )
+    else:
+        notice = await message.reply("📥 Processing file...")
+        
     await track_message(notice)
 
     file_path = await message.download()
@@ -170,7 +194,16 @@ async def handle_txt(client, message):
         token_required = any("childId=" in l for l in lines)
         token = None
         if token_required:
-            prompt = await client.send_message(chat_id, f"🔐 Token required for this batch.\nSend token now (within 60s).")
+            # Send custom photo for token request
+            if os.path.exists(CUSTOM_PHOTO):
+                prompt = await client.send_photo(
+                    chat_id,
+                    CUSTOM_PHOTO,
+                    caption=f"🔐 Token required for this batch.\nSend token now (within 60s)."
+                )
+            else:
+                prompt = await client.send_message(chat_id, f"🔐 Token required for this batch.\nSend token now (within 60s).")
+                
             await track_message(prompt)
             token = await get_token_with_timeout(chat_id)
             if not token:
@@ -194,7 +227,6 @@ async def handle_txt(client, message):
                     await msg.edit(f"❌ PDF failed: {str(e)}")
                 continue
 
-            # Common function for both types
             async def download_video(url, title):
                 msg = await message.reply(f"🎞 Downloading video: {title}")
                 await track_message(msg)
@@ -211,12 +243,15 @@ async def handle_txt(client, message):
                                 speed_bytes = d.get("speed", 0)
 
                                 percent = (downloaded / total_bytes * 100) if total_bytes else 0
-                                speed = f"{speed_bytes / (1024 * 1024):.2f} MB/s" if speed_bytes else "N/A"
+                                speed = speed_bytes / (1024 * 1024) if speed_bytes else 0
                                 size = f"{downloaded // (1024*1024)}MB / {total_bytes // (1024*1024)}MB" if total_bytes else f"{downloaded // (1024*1024)}MB / ?MB"
 
-                                text = f"**WAIT PLEASE**\n{percent:.2f}% | {speed}"
+                                text = f"🎞 Downloading: {title}\n"
+                                text += f"├─ Progress: {percent:.2f}%\n"
+                                text += f"├─ Speed: {speed:.2f} MB/s\n"
+                                text += f"└─ {size}"
                                 try:
-                                    asyncio.create_task(msg.edit_text(text))
+                                    asyncio.run_coroutine_threadsafe(msg.edit_text(text), asyncio.get_event_loop())
                                 except:
                                     pass
                                 download_progress["last_update"] = now
@@ -243,9 +278,7 @@ async def handle_txt(client, message):
                 except Exception as e:
                     await msg.edit(f"❌ Video Error:\n{str(e)}\n\nURL: {url}")
 
-            # Special handling for childId
             if "childId=" in url and token:
-                from urllib.parse import quote
                 encoded_url = quote(url, safe=":/&?=")
                 new_url = f"https://anonymousrajputplayer-9ab2f2730a02.herokuapp.com/pw?url={encoded_url}&token={token}"
                 await download_video(new_url, title)
@@ -267,6 +300,7 @@ async def token_response(client, message):
         token_waiters[message.chat.id].set_result(message.text)
         del token_waiters[message.chat.id]
     await track_message(message)
+
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 

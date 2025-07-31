@@ -83,10 +83,7 @@ os.makedirs(USER_TOKENS_DIR, exist_ok=True)
 os.makedirs(USER_SECRETS_DIR, exist_ok=True)
 
 
-user_data = {}
 allowed_users = {}
-user_settings = {}
-pending_auth = {}
 token_waiters = {}
 batch_message_tracker = {}
 app = Client("youtube_upload_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -557,3 +554,4 @@ threading.Thread(target=run_keepalive).start()
 print("Bot is running...")
 app.run()
  
+

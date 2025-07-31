@@ -149,6 +149,18 @@ async def handle_txt(client, message):
     file_path = await message.download()
     await track_message(message)
 
+    def parse_line(line):
+        if ":https://" not in line:
+            return None, None
+        title, url = line.split(":https://", 1)
+        return title.strip(), "https://" + url.strip()
+
+    async def get_token_with_timeout(chat_id, timeout=60):
+        try:
+            return await asyncio.wait_for(wait_for_token(chat_id), timeout)
+        except asyncio.TimeoutError:
+            return None
+
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
@@ -156,21 +168,20 @@ async def handle_txt(client, message):
         token_required = any("childId=" in l for l in lines)
         token = None
         if token_required:
-            prompt = await client.send_message(chat_id, f"🔐 Token required for this batch.\nSend token now.")
+            prompt = await client.send_message(chat_id, f"🔐 Token required for this batch.\nSend token now (within 60s).")
             await track_message(prompt)
-            token = await wait_for_token(chat_id)
+            token = await get_token_with_timeout(chat_id)
+            if not token:
+                await client.send_message(chat_id, "❌ Token timeout. Try /batch again.")
+                return
 
         for line in lines:
-            if ":https://" not in line:
+            title, url = parse_line(line)
+            if not url:
                 continue
-
-            title, url = line.split(":https://", 1)
-            title = title.strip()
-            url = "https://" + url.strip()
 
             if url.endswith(".pdf"):
                 caption = (f"📄 **File Title :** {title}\n\n<pre><code>**📦 Batch Name :** {batch_name}</code></pre>\n**Contact (Admin) ➤**{CREDIT} \n\n**Join Now...🔻** \n https://t.me/addlist/Yfez5bB2FiljMzE1\n https://youtube.com/@LocalBoyPrince")
-
                 msg = await message.reply(f"📄 Downloading PDF: {title}")
                 await track_message(msg)
                 try:
@@ -181,10 +192,8 @@ async def handle_txt(client, message):
                     await msg.edit(f"❌ PDF failed: {str(e)}")
                 continue
 
-            if "childId=" in url and token:
-                encoded_url = quote(url, safe=":/&?=")
-                url = f"https://anonymousrajputplayer-9ab2f2730a02.herokuapp.com/pw?url={encoded_url}&token={token}"
-
+            # Common function for both types
+            async def download_video(url, title):
                 msg = await message.reply(f"🎞 Downloading video: {title}")
                 await track_message(msg)
 
@@ -201,42 +210,45 @@ async def handle_txt(client, message):
 
                                 percent = (downloaded / total_bytes * 100) if total_bytes else 0
                                 speed = f"{speed_bytes / (1024 * 1024):.2f} MB/s" if speed_bytes else "N/A"
-                                size = (
-                                    f"{downloaded // (1024*1024)}MB / {total_bytes // (1024*1024)}MB"
-                                    if total_bytes else
-                                    f"{downloaded // (1024*1024)}MB / ?MB"
-                                )
-                    
-                                text = f"**WAIT PLEASE**"
-                                asyncio.create_task(msg.edit_text(text))
+                                size = f"{downloaded // (1024*1024)}MB / {total_bytes // (1024*1024)}MB" if total_bytes else f"{downloaded // (1024*1024)}MB / ?MB"
+
+                                text = f"**WAIT PLEASE**\n{percent:.2f}% | {speed}"
+                                try:
+                                    asyncio.create_task(msg.edit_text(text))
+                                except:
+                                    pass
                                 download_progress["last_update"] = now
-                
 
                     ydl_opts = {
-        "outtmpl": f"{title.replace(' ', '_')}.%(ext)s",
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "merge_output_format": "mp4",
-        "quiet": True,
-        "progress_hooks": [hook],
-        "postprocessors": [
-            {"key": "FFmpegMetadata"},
-            {"key": "FFmpegVideoConvertor", "preferedformat": "mp4"}
-        ]
-    }
-                
-
-
+                        "outtmpl": f"{title.replace(' ', '_')}.%(ext)s",
+                        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                        "merge_output_format": "mp4",
+                        "quiet": True,
+                        "progress_hooks": [hook],
+                        "postprocessors": [
+                            {"key": "FFmpegMetadata"},
+                            {"key": "FFmpegVideoConvertor", "preferedformat": "mp4"}
+                        ]
+                    }
 
                     with YoutubeDL(ydl_opts) as ydl:
                         info = ydl.extract_info(url, download=True)
                         path = ydl.prepare_filename(info)
-                
-                    caption = (f"📄 **File Title :** {title}\n\n**YOUTUBE Link...🔻** \n\n\n<pre><code>**📦 Batch Name :** {batch_name}</code></pre>\n**Contact (Admin) ➤**{CREDIT} \n\n**Join Now...🔻** \n https://t.me/addlist/Yfez5bB2FiljMzE1\n https://youtube.com/@LocalBoyPrince")
 
+                    caption = (f"📄 **File Title :** {title}\n\n<pre><code>**📦 Batch Name :** {batch_name}</code></pre>\n**Contact (Admin) ➤**{CREDIT} \n\n**Join Now...🔻** \n https://t.me/addlist/Yfez5bB2FiljMzE1\n https://youtube.com/@LocalBoyPrince")
                     await upload_file_with_progress(client, chat_id, path, caption, is_video=True)
+
                 except Exception as e:
                     await msg.edit(f"❌ Video Error:\n{str(e)}\n\nURL: {url}")
-                    continue
+
+            # Special handling for childId
+            if "childId=" in url and token:
+                from urllib.parse import quote
+                encoded_url = quote(url, safe=":/&?=")
+                new_url = f"https://anonymousrajputplayer-9ab2f2730a02.herokuapp.com/pw?url={encoded_url}&token={token}"
+                await download_video(new_url, title)
+            else:
+                await download_video(url, title)
 
         await notice.delete()
         await delete_tracked_messages(client, chat_id)
@@ -246,6 +258,7 @@ async def handle_txt(client, message):
     except Exception as e:
         await notice.edit(f"❌ Error: {str(e)}")
         await delete_tracked_messages(client, chat_id)
+
 
 @app.on_message(filters.text & filters.private)
 async def token_response(client, message):

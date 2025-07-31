@@ -178,15 +178,9 @@ async def handle_txt(client, message):
                 return
 
         for line in lines:
-
-        for line in lines:
-    # Extract title and URL even if ':' is missing
-            match = re.search(r"(.*?)(https?://[^\s]+)", line)
-            if not match:
+            title, url = parse_line(line)
+            if not url:
                 continue
-            title, url = match.groups()
-            title = title.strip()
-            url = url.strip()
 
             if url.endswith(".pdf"):
                 caption = (f"📄 **File Title :** {title}\n\n<pre><code>**📦 Batch Name :** {batch_name}</code></pre>\n**Contact (Admin) ➤**{CREDIT} \n\n**Join Now...🔻** \n https://t.me/addlist/Yfez5bB2FiljMzE1\n https://youtube.com/@LocalBoyPrince")
@@ -197,12 +191,11 @@ async def handle_txt(client, message):
                     await download_file_with_progress(url, pdf_name, msg, chat_id)
                     await upload_file_with_progress(client, chat_id, pdf_name, caption, is_video=False)
                 except Exception as e:
-                    traceback.print_exc()
                     await msg.edit(f"❌ PDF failed: {str(e)}")
                 continue
 
+            # Common function for both types
             async def download_video(url, title):
-                print(f"🚀 Starting download for: {title}")
                 msg = await message.reply(f"🎞 Downloading video: {title}")
                 await track_message(msg)
 
@@ -219,11 +212,7 @@ async def handle_txt(client, message):
 
                                 percent = (downloaded / total_bytes * 100) if total_bytes else 0
                                 speed = f"{speed_bytes / (1024 * 1024):.2f} MB/s" if speed_bytes else "N/A"
-                                size = (
-                                    f"{downloaded // (1024*1024)}MB / {total_bytes // (1024*1024)}MB"
-                                    if total_bytes else
-                                    f"{downloaded // (1024*1024)}MB / ?MB"
-                                )
+                                size = f"{downloaded // (1024*1024)}MB / {total_bytes // (1024*1024)}MB" if total_bytes else f"{downloaded // (1024*1024)}MB / ?MB"
 
                                 text = f"**WAIT PLEASE**\n{percent:.2f}% | {speed}"
                                 try:
@@ -252,19 +241,14 @@ async def handle_txt(client, message):
                     await upload_file_with_progress(client, chat_id, path, caption, is_video=True)
 
                 except Exception as e:
-                    traceback.print_exc()
                     await msg.edit(f"❌ Video Error:\n{str(e)}\n\nURL: {url}")
 
-            # childId special case
+            # Special handling for childId
             if "childId=" in url and token:
                 from urllib.parse import quote
                 encoded_url = quote(url, safe=":/&?=")
                 new_url = f"https://anonymousrajputplayer-9ab2f2730a02.herokuapp.com/pw?url={encoded_url}&token={token}"
-                print("🔐 childId URL detected, using token")
                 await download_video(new_url, title)
-            else:
-                print("👉 Normal video URL detected")
-                await download_video(url, title)                await download_video(new_url, title)
             else:
                 await download_video(url, title)
 
@@ -276,7 +260,6 @@ async def handle_txt(client, message):
     except Exception as e:
         await notice.edit(f"❌ Error: {str(e)}")
         await delete_tracked_messages(client, chat_id)
-
 
 @app.on_message(filters.text & filters.private)
 async def token_response(client, message):

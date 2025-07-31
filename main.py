@@ -520,7 +520,7 @@ async def handle_txt(client, message):
 
 
 # ===================== MESSAGE HANDLERS =====================
-@app.on_message(filters.text & ~filters.command(["start", "help", "video", "settings", "cancel", "auth"]))
+@app.on_message(filters.text & ~filters.command)
 async def handle_text(client, message: Message):
     user_id = message.from_user.id
     
